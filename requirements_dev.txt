@@ -1,0 +1,7 @@
+# Requirements needed for development, testing and deployment,
+# but not needed in production
+
+# Import production requirements
+-r requirements.txt
+
+# Add development requirements below
