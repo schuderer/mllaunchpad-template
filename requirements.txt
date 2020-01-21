@@ -1,0 +1,31 @@
+# It is recommended to use a virtual environment,
+# instructions below:
+
+# Before installing these requirements,
+# cd into your project directory and
+# create a virtual environment (if you did
+# not do so earlier) using the command:
+# $ python -m venv .venv
+# (IF you are using conda and get an error,
+# you might need to update conda and
+# then python:
+# $ conda update -n base -c defaults conda
+# $ conda update python
+# )
+
+# Activate the env using, on Windows:
+# $ .venv\Scripts\activate.bat
+# On maxOS/Unix:
+# $ source .venv/bin/activate
+
+# THEN install these requirements using the command:
+# $ pip -r requirements.txt
+# A guide to venv is available here:
+# https://docs.python.org/3/tutorial/venv.html
+
+# This is the mllaunchpad dependency
+mllaunchpad
+
+# Add your model's dependencies below.
+# For specifying particular versions, please
+# see: https://pip.readthedocs.io/en/1.1/requirements.html
