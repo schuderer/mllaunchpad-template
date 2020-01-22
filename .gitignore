@@ -1,5 +1,7 @@
 .idea/
 private/
+model_store/
+.venv_temp_deploy
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -29,3 +29,6 @@ mllaunchpad
 # Add your model's dependencies below.
 # For specifying particular versions, please
 # see: https://pip.readthedocs.io/en/1.1/requirements.html
+scikit-learn
+pandas
+gunicorn

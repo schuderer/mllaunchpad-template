@@ -1,0 +1,46 @@
+#plugins:
+#  - examples.bogusdatasource
+
+datasources:
+  petals:
+    type: csv
+    path: ./private/iris_train.csv  # The string can also be a URL. Valid URL schemes include http, ftp, s3, and file.
+    expires: 0  # -1: never (=cached forever), 0: immediately (=no caching), >0: time in seconds.
+    options: {}
+    tags: train
+  petals_test:
+    type: csv
+    path: ./private/iris_holdout.csv  # The string can also be a URL. Valid URL schemes include http, ftp, s3, and file.
+    expires: 3600  # -1: never (=cached forever), 0: immediately (=no caching), >0: time in seconds.
+    options: {}
+    tags: test
+  batch_input:
+    type: csv
+    path: ./private/iris_pred_input.csv
+    expires: 3600  # -1: never (=cached forever), 0: immediately (=no caching), >0: time in seconds.
+    options: {}
+    tags: predict
+
+datasinks:
+  predictions:
+    type: csv
+    path: ./private/iris_pred_output.csv
+    options: {}
+    tags: [predict]
+
+model_store:
+  location: ./private/model_store  # TODO: maybe support sftp or other remote locations...
+
+model:
+  name: IrisModel
+  version: '0.0.2'  # use semantic versioning (<breaking>.<adding>.<fix>)
+  module: app.model  # same as file name without .py
+  train_options: {}
+  predict_options: {}
+
+api:
+  name: iris  # name of the service api
+  version: '0.0.2'  # use semantic versioning (breaking.adding.fix), first segment will be used in url as e.g. .../v1/...
+  raml: api.raml
+  preload_datasources: True  # Load datasources into memory before any predictions. Only makes sense with caching.
+  root_path: .  # (optional) set directory where Flask should look for the directories `static` and `templates` to serve.

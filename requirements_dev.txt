@@ -5,3 +5,6 @@
 -r requirements.txt
 
 # Add development requirements below
+wheel
+pytest
+setuptools
