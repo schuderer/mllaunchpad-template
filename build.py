@@ -17,6 +17,7 @@ required_config = {
             "platform": {},
             "save_to": {},
         },
+        "python": {},
     },
     "api": {
         "name": {},
@@ -27,6 +28,7 @@ venv_location = ".venv_temp_deploy"
 build_path = "build"
 deployed_config_name = "LAUNCHPAD_CFG.yml"
 deployed_requirements_name = "LAUNCHPAD_REQ.txt"
+required_python_name = "LAUNCHPAD_REQ_PYTHON.txt"
 
 
 def delete_dir(path):
@@ -65,7 +67,7 @@ def get_requirements(req_file, target_platform, target_dir):
                 if yes != "yes":
                     sys.exit(0)
 
-        print(" Creating temporary environment {}...".format(venv_location))
+        print("Creating temporary environment {}...".format(venv_location))
         venv.create(venv_location, clear=True, with_pip=True)
 
         interpreter = os.path.join(
@@ -74,7 +76,7 @@ def get_requirements(req_file, target_platform, target_dir):
             "python"
         )
 
-        print(" Downloading requirements from {} for platform {}...".format(req_file, target_platform))
+        print("Downloading requirements from {} for platform {}...".format(req_file, target_platform))
         delete_dir(target_dir)
         create_dir(target_dir)
         cmd = [interpreter, "-m", "pip",  "download",
@@ -97,11 +99,16 @@ def main():
         config = yaml.safe_load(config_str)
         validate_config(config, required_config)
 
+    major, minor = str(config["deploy"]["python"]).split(".")
+    if str(sys.version_info[0]) != major or str(sys.version_info[1]) != minor:
+        raise AssertionError("Your Python version {}.{} does not match the target Python version {}.{}".format(
+            sys.version_info[0], sys.version_info[1], major, minor
+        ))
+
     root_path = os.path.dirname(config_file)
     old_working_dir = os.getcwd()
     os.chdir(os.path.abspath(root_path))
 
-    print("Collecting requirements...")
     req_cfg = config["deploy"]["requirements"]
     req_str = get_requirements(req_cfg["file"], req_cfg["platform"], req_cfg["save_to"])
 
@@ -127,6 +134,8 @@ def main():
         zip_file.writestr(deployed_config_name, config_str)
         print("Adding file {}".format(deployed_requirements_name))
         zip_file.writestr(deployed_requirements_name, req_str)
+        print("Adding file {}".format(required_python_name))
+        zip_file.writestr(required_python_name, "{}{}".format(major, minor))
 
     os.chdir(old_working_dir)
     print("\nDone. Build artifacts can be found in the '{}' subdirectory.".format(build_path))

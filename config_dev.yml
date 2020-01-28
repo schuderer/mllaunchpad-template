@@ -58,5 +58,6 @@ deploy:
     file: requirements_frozen.txt
     platform: manylinux1_x86_64
     save_to: wheels
+  python: '3.6'
   target: sftp://127.0.0.1/models
   params: {}
