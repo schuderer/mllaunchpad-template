@@ -10,6 +10,13 @@ from zipfile import ZipFile
 import yaml
 
 required_config = {
+    "model_store": {
+        "location": {},
+    },
+    "model": {
+        "name": {},
+        "version": {},
+    },
     "deploy": {
         "include": {},
         "requirements": {
@@ -63,7 +70,7 @@ def get_requirements(req_file, target_platform, target_dir):
                       "or create a frozen requirements file in a clean environment.\n"
                       "For the latter, see https://github.com/schuderer/mllaunchpad/issues/60\n")
                 print("Do you REALLY want to continue with unpinned requirements?")
-                yes = input("(Type 'yes' to continue, Enter to quit)")
+                yes = input("(Type 'yes' to continue, Enter to quit) ")
                 if yes != "yes":
                     sys.exit(0)
 
@@ -82,11 +89,54 @@ def get_requirements(req_file, target_platform, target_dir):
         cmd = [interpreter, "-m", "pip",  "download",
                "--platform", target_platform, "--no-deps", "-d", target_dir, "-r", req_file]
         print(" ".join(cmd))
-        subprocess.Popen(cmd).wait()
+        result = subprocess.Popen(cmd).wait()
+        if result != 0:
+            raise RuntimeError("An error occurred when downloading the requirements.")
 
         return req_str
     finally:
+        print("Removing temporary environment {}".format(venv_location))
         delete_dir(venv_location)
+
+
+def get_model(config, config_file):
+    store = config["model_store"]["location"]
+    if os.path.relpath(store) in [os.path.relpath(os.path.dirname(p)) for p in config["deploy"]["include"] if os.path.dirname(p) != ""]:
+        print("\nYour configuration's deploy:include setting specifies to deploy the model store.")
+        model_name = "{}_{}".format(config["model"]["name"], config["model"]["version"])
+        if os.path.exists(os.path.join(store, model_name + ".pkl")):
+            print("If you don't re-train a model now, the existing model {} will be deployed.".format(model_name))
+        else:
+            print("There is no trained model to deploy, so model(s) will have to be trained in the target environment.")
+        yn = input("Do you want to (re)train model {} now (y/n)? ".format(model_name))
+        if yn.lower() == "y":
+            try:
+                print("Creating temporary environment {}...".format(venv_location))
+                venv.create(venv_location, clear=True, with_pip=True)
+
+                interpreter = os.path.join(
+                    venv_location,
+                    "Scripts" if platform.system() == "Windows" else "bin",
+                    "python"
+                )
+
+                req_file = config["deploy"]["requirements"]["file"]
+                print("Installing requirements from {}...".format(req_file))
+                cmd = [interpreter, "-m", "pip", "install", "--upgrade", "-r", req_file]
+                print(" ".join(cmd))
+                install_result = subprocess.Popen(cmd).wait()
+                if install_result != 0:
+                    raise RuntimeError("An error occurred when installing the requirements.")
+
+                train_cmd = [interpreter, "-m", "mllaunchpad", "-c", config_file, "-t"]
+                print(" ".join(train_cmd))
+                train_result = subprocess.Popen(train_cmd).wait()
+                if train_result != 0:
+                    raise RuntimeError("An error occurred when training the model.")
+
+            finally:
+                print("Removing temporary environment {}".format(venv_location))
+                delete_dir(venv_location)
 
 
 def main():
@@ -111,6 +161,8 @@ def main():
 
     req_cfg = config["deploy"]["requirements"]
     req_str = get_requirements(req_cfg["file"], req_cfg["platform"], req_cfg["save_to"])
+
+    get_model(config, config_file)
 
     files = []
     for file_pattern in config["deploy"]["include"]:
