@@ -4,6 +4,8 @@ from sklearn import tree
 import pandas as pd
 import logging
 
+from app.example_import import clean_string
+
 logger = logging.getLogger(__name__)
 
 # Train this example from the command line:
@@ -27,6 +29,7 @@ class MyExampleModelMaker(ModelMakerInterface):
     """
 
     def create_trained_model(self, model_conf, data_sources, data_sinks, old_model=None):
+        logger.info(clean_string("using our imported module"))
 
         df = data_sources['petals'].get_dataframe()
         X = df.drop('variety', axis=1)
@@ -59,28 +62,8 @@ class MyExampleModel(ModelInterface):
     """
 
     def predict(self, model_conf, data_sources, data_sinks, model, args_dict):
+        logger.info(clean_string("using our imported module"))
 
-        if 'test_key' in args_dict:
-            # URI param example (an uri param is part in the args_dict just like any other input)
-            key = args_dict['test_key']
-            logger.info('Got the uri parameter (ID) %s. Looking up input data and predicting...', key)
-            df = data_sources['batch_input'].get_dataframe()
-            df['myid'] = df['myid'].apply(str)
-            X = df.loc[df['myid'] == key]
-            my_tree = model
-            y = my_tree.predict(X.drop('myid', axis=1))[0]
-            return {'iris_variety': y}
-        elif 'sepal.length' not in args_dict or args_dict['sepal.length'] is None:
-            # Batch prediction example
-            logger.info('Doing batch prediction')
-            X = data_sources['batch_input'].get_dataframe()
-            my_tree = model
-            y = my_tree.predict(X.drop('myid', axis=1))
-            X['pred'] = y
-            data_sinks['predictions'].put_dataframe(X)
-            return {'status': 'ok'}
-
-        # "Normal" prediction example
         logger.info('Doing "normal" prediction')
         X = pd.DataFrame({
             'sepal.length': [args_dict['sepal.length']],

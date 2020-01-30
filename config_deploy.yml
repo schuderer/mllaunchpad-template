@@ -33,7 +33,7 @@ api:
   root_path: .  # (optional) set directory where Flask should look for the directories `static` and `templates` to serve.
 
 deploy:
-  include:  # Uses recursion
+  include: # Files/patterns that should be added to the zipped deployment artifact. Uses recursion.
     - app/*
     - '*.yml'
     - '*.raml'
@@ -48,6 +48,9 @@ deploy:
     file: requirements_frozen.txt
     platform: manylinux1_x86_64
     save_to: wheels
+    vulnerability_db: C:/dev/python_vulnerability_db  # If empty string "", tries to get information from pyup's safety-db website (source: https://raw.githubusercontent.com/pyupio/safety-db/master/data/)
+    pip_index_url: ""  # Empty string "" to use the default (which is usually pypi.org, but depends on your pip config).
+    pip_trusted_hosts: []  # WARNING: Only ever use when told to use, and even then only as an exception, and only for hosts in the local network!
   python: '3.6'
   target: sftp://127.0.0.1/models
   params: {}

@@ -31,20 +31,3 @@ api:
   raml: api.raml
   preload_datasources: True  # Load datasources into memory before any predictions. Only makes sense with caching.
   root_path: .  # (optional) set directory where Flask should look for the directories `static` and `templates` to serve.
-
-deploy:
-  include:  # Uses recursion
-    - app/*
-    - config_dev.yml
-    - '*.raml'
-    - requirements_frozen.txt
-    - wheels/*
-  exclude:  # Exclude files with any of these strings in their path
-    - __pycache__
-  requirements:
-    file: requirements_frozen.txt
-    platform: manylinux1_x86_64
-    save_to: wheels
-  python: '3.6'
-  target: sftp://127.0.0.1/models
-  params: {}
