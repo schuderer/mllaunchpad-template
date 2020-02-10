@@ -3,6 +3,7 @@ from glob import glob
 import os
 import shutil
 import platform
+import re
 import subprocess
 import sys
 import venv
@@ -37,6 +38,8 @@ build_path = "build"
 deployed_config_name = "LAUNCHPAD_CFG.yml"
 deployed_requirements_name = "LAUNCHPAD_REQ.txt"
 required_python_name = "LAUNCHPAD_REQ_PYTHON.txt"
+required_files_name = "LAUNCHPAD_REQ_FILES.txt"
+base_url_file_name = "LAUNCHPAD_BASE_URL.txt"
 
 
 def delete_dir(path):
@@ -55,6 +58,8 @@ def validate_config(config_dict, required, path=""):
         if item not in config_dict:
             raise ValueError("Missing key in config file: {}".format(path_start + item))
         validate_config(config_dict[item], required[item], path_start + item)
+    if path == "" and "_" in config_dict["api"]["name"]:
+        raise AssertionError("Config's api:name '{}' must not contain underscores".format(config_dict["api"]["name"]))
 
 
 @contextmanager
@@ -72,24 +77,34 @@ def python_interpreter():
         delete_dir(venv_location)
 
 
+class RequirementsNeedFreezing(Exception):
+    pass
+
+
 def load_req_file(req_file):
     # Check whether requirement versions are pinned
     with open(req_file) as f:
         req_str = f.read()
-        if '==' not in req_str:
+        trimmed_lines = [l.strip() for l in req_str.splitlines()]
+        relevant_lines = [l for l in trimmed_lines if l and l[0] != "#" and l[0] != "-"]
+        print(relevant_lines)
+        okay_lines = [True if "=" in l else False for l in relevant_lines]
+        print(okay_lines)
+        if not all(okay_lines):
             print("\nWARNING: The requirements file specified in your config\n"
                   "does not seem to specify versions. It is highly recommended to only\n"
                   "deploy version-specific requirements (a.k.a. pinned requirements)\n"
                   "to ensure reproducibility even as pypi packages change.\n"
-                  "Ideally, you would explicitly manage your requirements,\n"
+                  "Ideally, you would explicitly manage your dependencies' versions,\n"
                   "or create a frozen requirements file in a clean environment.\n"
-                  "For the latter, see https://github.com/schuderer/mllaunchpad/issues/60\n")
-            print("Do you REALLY want to continue with unpinned requirements?")
-            yes = input("(Type 'yes' to continue anyway, Enter to quit (recommended)) ")
-            if yes != "yes":
-                sys.exit(0)
+                  "You can use this script to do the latter: 'build --freeze <config>'.\n"
+                  "(for manual freezing, see https://github.com/schuderer/mllaunchpad/issues/60)\n")
+            print("I can freeze the requirements for you now. Do you want me to do that?")
+            yes = input("(Type 'y' to freeze, Enter to abort and solve the problem yourself) ")
+            if yes and yes[0].lower() == "y":
+                raise RequirementsNeedFreezing()
             else:
-                print("Okay. Don't say I didn't warn ya.")
+                sys.exit(0)
         return req_str
 
 
@@ -103,6 +118,16 @@ def run_pip(interpreter, req_cfg, params):
     cmd = [interpreter, "-m", "pip", *params, *url_params]
     print(" ".join(cmd))
     return subprocess.Popen(cmd).wait()
+
+
+def install_reqs(interpreter, config):
+    req_cfg = config["deploy"]["requirements"]
+    req_file = req_cfg["file"]
+
+    print("Installing requirements from {}...".format(req_file))
+    pip_params = ["install", "--upgrade", "-r", req_file]
+    if run_pip(interpreter, req_cfg, pip_params) != 0:
+        raise RuntimeError("An error occurred when installing the requirements.")
 
 
 def dependency_vulnerability_check(req_cfg):
@@ -119,7 +144,8 @@ def dependency_vulnerability_check(req_cfg):
         if subprocess.Popen(check_cmd).wait() == 0:
             print("No vulnerabilities found.")
         else:
-            raise AssertionError("Either vulnerabilities found in dependencies or error on executing check. See above for details.")
+            raise AssertionError("Either vulnerabilities found in dependencies or error on executing check. "
+                                 "See above for details.")
 
 
 def get_requirements(req_cfg):
@@ -141,18 +167,12 @@ def get_model(config, config_file):
         if os.path.exists(os.path.join(store, model_name + ".pkl")):
             print("If you don't re-train now, the existing model {} will be deployed.".format(model_name))
         else:
-            print("There is no trained model to deploy, so model(s) will have to be trained in the target environment.")
-        yn = input("Do you want to (re)train model {} now (y/n)? ".format(model_name))
-        if yn.lower() == "y":
+            print("There is no trained model to deploy, so you either have to train the model now,\n"
+                  "or model(s) will have to be trained in the target environment.")
+        yn = input("Type 'y' to (re)train model {} now, Enter to continue without training: ".format(model_name))
+        if yn and yn[0].lower() == "y":
             with python_interpreter() as interpreter:
-                req_cfg = config["deploy"]["requirements"]
-                req_file = req_cfg["file"]
-
-                print("Installing requirements from {}...".format(req_file))
-                pip_params = ["install", "--upgrade", "-r", req_file]
-                if run_pip(interpreter, req_cfg, pip_params) != 0:
-                    raise RuntimeError("An error occurred when installing the requirements.")
-
+                install_reqs(interpreter, config)
                 train_cmd = [interpreter, "-m", "mllaunchpad", "-c", config_file, "-t"]
                 print(" ".join(train_cmd))
                 train_result = subprocess.Popen(train_cmd).wait()
@@ -160,15 +180,76 @@ def get_model(config, config_file):
                     raise RuntimeError("An error occurred when training the model.")
 
 
-def main():
-    if len(sys.argv) != 2:
-        raise ValueError("Expected config file as only command line argument.")
-    config_file = sys.argv[1]
-
+def get_config(config_file):
     with open(config_file) as f:
         config_str = f.read()
         config = yaml.safe_load(config_str)
         validate_config(config, required_config)
+    return config, config_str
+
+
+def freeze_reqs(config_file):
+    """Returns True if config has been changed and can be reloaded, False if user has to handle this themselves."""
+    config, config_str = get_config(config_file)
+
+    with python_interpreter() as interpreter:
+        install_reqs(interpreter, config)
+        old_reqs_file = config["deploy"]["requirements"]["file"]
+        frozen_reqs_file_name, ext = os.path.splitext(old_reqs_file)
+        frozen_reqs_file = "{}_frozen{}".format(frozen_reqs_file_name, ext)
+        freeze_cmd = [interpreter, "-m", "pip", "freeze"]
+        print(" ".join(freeze_cmd) + " > " + frozen_reqs_file)
+        with open(frozen_reqs_file, "w") as out:
+            train_result = subprocess.Popen(freeze_cmd, stdout=out).wait()
+        if train_result != 0:
+            raise RuntimeError("An error occurred when freezing the requirements.")
+        print("Froze the requirements {} into {}".format(old_reqs_file, frozen_reqs_file))
+        print("\nI can modify the config {} for you to include {} instead of {}".format(
+            config_file, frozen_reqs_file, old_reqs_file))
+        yes = input("(Type 'y' to update the config file now, press Enter to handle this manually later) ")
+        if yes and yes[0].lower() == 'y':
+            config_file_old = "{}_before_freeze{}".format(*os.path.splitext(config_file))
+            shutil.move(config_file, config_file_old)
+            regex = re.compile(r"\s+file:\s*[\"']?({})[\"']?\s*#?[^\n\r]*".format(old_reqs_file), re.MULTILINE)
+            matches = regex.findall(config_str)
+            if len(matches) != 1:
+                raise ValueError("Could not update config file. Expected exactly 1 location where to change "
+                                 "{} to {}, but found {} locations".format(old_reqs_file, frozen_reqs_file, len(matches)))
+            with open(config_file, "w") as new_file:
+                for line in config_str.splitlines():
+                    if regex.match(line):
+                        line = line.replace(old_reqs_file, frozen_reqs_file)
+                    # print(line)
+                    new_file.write(line + "\n")
+
+            print("\nFroze the requirements {} into {} \n"
+                  "and modified the config file {} to include them. \n"
+                  "The previous config file has been backed up to {}".format(
+                    old_reqs_file,
+                    frozen_reqs_file,
+                    config_file,
+                    config_file_old))
+            return True
+    return False
+
+
+def main():
+    args = sys.argv[1:]
+    if "-f" in args or "--freeze" in args:
+        if len(args) != 2:
+            raise ValueError("Freezing requirements requires a config file with a reference to the unfrozen file in \n"
+                             "deploy:requirements:file. "
+                             "It will create a <filename>_frozen.txt and change \n"
+                             "your deployment config's deploy:requirements:file to <filename>_frozen.txt.")
+        config_file = [a for a in args if a != "-f" and a != "--freeze"][0]
+        freeze_reqs(config_file)
+        sys.exit(0)
+
+    if len(sys.argv) != 2:
+        raise ValueError("Expected single argument with config file.")
+    config_file = sys.argv[1]
+
+    config, config_str = get_config(config_file)
 
     major, minor = str(config["deploy"]["python"]).split(".")
     if str(sys.version_info[0]) != major or str(sys.version_info[1]) != minor:
@@ -181,7 +262,19 @@ def main():
     os.chdir(os.path.abspath(root_path))
 
     req_cfg = config["deploy"]["requirements"]
-    req_str = load_req_file(req_cfg["file"])
+    try:
+        req_str = load_req_file(req_cfg["file"])
+    except RequirementsNeedFreezing:
+        config_changed = freeze_reqs(config_file)
+        if config_changed:
+            # Continue script
+            config, config_str = get_config(config_file)
+            req_cfg = config["deploy"]["requirements"]
+            req_str = load_req_file(req_cfg["file"])
+        else:
+            print("\nPlease update your config file's deploy:requirements:file to point \n"
+                  "to the frozen requirements and run 'python build.py <config_file> again.")
+            sys.exit(0)
 
     get_model(config, config_file)
 
@@ -216,6 +309,15 @@ def main():
         zip_file.writestr(deployed_requirements_name, req_str)
         print("Adding file {}".format(required_python_name))
         zip_file.writestr(required_python_name, "{}{}".format(major, minor))
+        print("Adding file {}".format(required_files_name))
+        required_files_str = ""
+        if "deployment_requires" in config["deploy"]:
+            required_files_str = "\n".join(config["deploy"]["deployment_requires"]).replace("\\", "/")
+        zip_file.writestr(required_files_name, required_files_str)
+        print("Adding file {}".format(base_url_file_name))
+        base_url = "{}/v{}/".format(config["api"]["name"],
+                                    config["api"]["version"].split(".")[0])
+        zip_file.writestr(base_url_file_name, base_url)
 
     os.chdir(old_working_dir)
     print("\nDone. Build artifacts can be found in the '{}' subdirectory.".format(build_path))

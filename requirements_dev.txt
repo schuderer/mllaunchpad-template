@@ -5,6 +5,7 @@
 -r requirements.txt
 
 # Add development requirements below
+yaml
 wheel
 pytest
 setuptools

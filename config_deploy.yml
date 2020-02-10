@@ -20,14 +20,14 @@ model_store:
 
 model:
   name: IrisModel
-  version: '0.0.4'  # use semantic versioning (<breaking>.<adding>.<fix>)
+  version: '0.0.5'  # use semantic versioning (<breaking>.<adding>.<fix>)
   module: app.model  # same as file name without .py
   train_options: {}
   predict_options: {}
 
 api:
   name: iris  # name of the service api
-  version: '0.0.4'  # use semantic versioning (breaking.adding.fix), first segment will be used in url as e.g. .../v1/...
+  version: '0.0.5'  # use semantic versioning (breaking.adding.fix), first segment will be used in url as e.g. .../v1/...
   raml: api.raml
   preload_datasources: True  # Load datasources into memory before any predictions. Only makes sense with caching.
   root_path: .  # (optional) set directory where Flask should look for the directories `static` and `templates` to serve.
@@ -37,7 +37,6 @@ deploy:
     - app/*
     - '*.yml'
     - '*.raml'
-    - requirements_frozen.txt
     - wheels/*
     - model_store/*
   exclude:  # Exclude files with any of these strings in their path
@@ -45,12 +44,12 @@ deploy:
     - config_tpl.yml
     - config_dev.yml
   requirements:
-    file: requirements_frozen.txt
-    platform: manylinux1_x86_64
+    file: requirements_frozen.txt  # Please use frozen requirements for reproducibility. How to create: https://github.com/schuderer/mllaunchpad/issues/60
+    platform: manylinux1_x86_64  # will have to transition to manylinux2010 some time in the future (supported by pip>=19.0)
     save_to: wheels
     vulnerability_db: C:/dev/python_vulnerability_db  # If empty string "", tries to get information from pyup's safety-db website (source: https://raw.githubusercontent.com/pyupio/safety-db/master/data/)
     pip_index_url: ""  # Empty string "" to use the default (which is usually pypi.org, but depends on your pip config).
     pip_trusted_hosts: []  # WARNING: Only ever use when told to use, and even then only as an exception, and only for hosts in the local network!
   python: '3.6'
-  target: sftp://127.0.0.1/models
-  params: {}
+  deployment_requires: []
+
