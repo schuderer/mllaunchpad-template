@@ -45,7 +45,7 @@ deploy:
     - config_dev.yml
   requirements:
     file: requirements_frozen.txt  # Please use frozen requirements for reproducibility. How to create: https://github.com/schuderer/mllaunchpad/issues/60
-    platform: manylinux1_x86_64  # will have to transition to manylinux2010 some time in the future (supported by pip>=19.0)
+    platforms: [manylinux1_x86_64]  # will have to transition to manylinux2010 some time in the future (supported by pip>=19.0)
     save_to: wheels
     vulnerability_db: C:/dev/python_vulnerability_db  # If empty string "", tries to get information from pyup's safety-db website (source: https://raw.githubusercontent.com/pyupio/safety-db/master/data/)
     pip_index_url: ""  # Empty string "" to use the default (which is usually pypi.org, but depends on your pip config).

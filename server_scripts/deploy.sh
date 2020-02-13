@@ -33,24 +33,32 @@ if [ -f "$registry" ]; then
     set -e
 fi
 
-echo "Extracting $1 to $name/..."
-unzip $file -d $name
-
-# subshell to emulate try catch to be able to remove the half-deployed api
+# Subshell emulating try-catch. In order to be able to remove the half-deployed api on failure
 set +e
 (
 set -e
+echo "Extracting $1 to $name/..."
+unzip $file -d $name
+
+echo "Checking required resources..."
 mapfile -t req_files <"$name/LAUNCHPAD_REQ_FILES.txt"
 for req_file in "${req_files[@]}"
 do
-  if [ ! -e "$req_file" ]; then
-      echo "The required resource '$req_file' has not been found. Aborting deployment."
+  full_req_file="$name/$req_file"
+  if [ ! -e "$full_req_file" ]; then
+      echo "The required resource '$full_req_file' has not been found. Aborting deployment."
       exit 5
   fi
+  echo "Resource '$full_req_file' found"
 done
 
+mypython="$(cat PYTHON.txt)"
+echo "Using Python interpreter at $mypython (from PYTHON.txt)"
+
 echo "Creating Python virtual environment..."
-python3 -m venv --clear $name/.venv
+# Use the global site-packages pip instead of installing the default one of this python in the venv
+#$mypython -m venv --clear --system-site-packages $name/.venv
+$mypython -m venv --clear $name/.venv
 
 source $name/.venv/bin/activate
 interpreter=$name/.venv/bin/python3
@@ -58,7 +66,7 @@ which python3
 python3 --version
 
 echo "Checking Python version..."
-version="$(python -c 'import sys;print(str(sys.version_info[0])+str(sys.version_info[1]))')"
+version="$(python3 -c 'import sys;print(str(sys.version_info[0])+str(sys.version_info[1]))')"
 req_version="$(<$name/LAUNCHPAD_REQ_PYTHON.txt)"
 if [[ "$version" == "$req_version" ]]; then
     echo "OK."
@@ -69,6 +77,7 @@ fi
 
 echo "Installing Python requirements..."
 python3 -m pip install --upgrade --no-index --find-links $name/wheels/ -r $name/LAUNCHPAD_REQ.txt
+rm -rf $name/wheels
 
 deactivate
 

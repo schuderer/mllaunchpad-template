@@ -17,6 +17,14 @@ if [ ! -d "$name" ]; then
     exit 2
 fi
 
+runinfo="$(./status.sh $name)"
+ppid="$(cut -d, -f4 <<<"$runinfo")"
+
+if [[ ! -z "$ppid" ]]; then
+    echo "Cannot undeploy a running API. API $name is running as process $ppid. Aborting."
+    exit 3
+fi
+
 if [ -f "$registry" ]; then
     set +e
     grep -qF "$name" "$registry"
