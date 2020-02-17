@@ -2,6 +2,8 @@ from contextlib import contextmanager
 from glob import glob
 import os
 import shutil
+from packaging.utils import canonicalize_name
+import pkg_resources
 import platform
 import re
 import subprocess
@@ -22,11 +24,12 @@ required_config = {
     "deploy": {
         "include": {},
         "requirements": {
-            "file": {},
+            "python": {},
             "platforms": {},
+            "file": {},
             "save_to": {},
+            "vulnerability_db": {},
         },
-        "python": {},
     },
     "api": {
         "name": {},
@@ -40,6 +43,7 @@ deployed_requirements_name = "LAUNCHPAD_REQ.txt"
 required_python_name = "LAUNCHPAD_REQ_PYTHON.txt"
 required_files_name = "LAUNCHPAD_REQ_FILES.txt"
 base_url_file_name = "LAUNCHPAD_BASE_URL.txt"
+constrain_download = False  # Experimental: specify python version and python implementation in 'pip download' command
 
 # Unfortunately, some packages have BUILD requirements that they don't
 # explicitly specify, but we need for installing on Linux.
@@ -49,6 +53,7 @@ base_url_file_name = "LAUNCHPAD_BASE_URL.txt"
 # BUT (!!) it is smarter to first try to downgrade the offending packages
 # until a wheel (.whl) file can be downloaded instead or source (tar.gz/zip).
 patch_requirements = {
+    "": ["setuptools", "gunicorn"]  # we will always need gunicorn to run our API
     # "packagename": ["requirements", "that this package needs", "but does't properly specify"],
     # "": ["setuptools"],  # always add if not present
     # "pandas": ["Cython"],
@@ -113,17 +118,17 @@ class RequirementsNeedFreezing(Exception):
 def load_req_file(req_file):
     # Check for implicit dependencies of requirements
     with open(req_file, "r+") as f:
-        packages = [l.strip().split("=")[0].split(">")[0] for l in f.readlines()]
+        packages = [re.split("[=>< #]", l.strip())[0] for l in f.readlines()]
         required_sets = [patch_requirements[k] for k in patch_requirements.keys() if k == "" or k in packages]
         required_packages_duplicates = [p for s in required_sets for p in s]  # flatten list of lists
         required_packages = list(set(required_packages_duplicates))  # unique packages
         missing_packages = [p for p in required_packages if p not in packages]
         if missing_packages:
             print("\nYou need to add the packages {} to the requirements file.\n"
-                  "They are needed to install other packages on deployment.\n"
+                  # "They are needed to install other packages on deployment.\n"
                   "After adding them, the requirements will have to be re-frozen.\n"
                   "Add them to requirements now?".format(missing_packages))
-            if user_confirms("(Type 'y' to add, Enter to abort and solve the problem yourself) "):
+            if user_confirms("(Type 'y' to add, Enter to abort and do this yourself) "):
                 lines_to_add = ["", "# Added by build script:"] + missing_packages
                 f.write("\n".join(lines_to_add))
             else:
@@ -200,7 +205,8 @@ def dependency_vulnerability_check(req_cfg):
 
 
 def get_requirements(req_cfg):
-    req_file, target_platforms, target_dir = req_cfg["file"], req_cfg["platforms"], req_cfg["save_to"]
+    req_file, py_ver, target_platforms, target_dir = req_cfg["file"], req_cfg["python"], req_cfg["platforms"], req_cfg["save_to"]
+    req_implementation = req_cfg.get("implementation", None)
     print("Downloading requirements from {} for platform tags {}...".format(req_file, target_platforms))
     with python_interpreter() as interpreter:
         delete_dir(target_dir)
@@ -212,7 +218,12 @@ def get_requirements(req_cfg):
         for req_line in req_lines:
             source_files = []
             for target_platform in target_platforms:
-                pip_params = ["download", "--platform", target_platform, "--no-deps", "-d", target_dir, req_line]
+                pip_params = ["download"]
+                if constrain_download:
+                    pip_params.extend(["--python-version", py_ver])
+                    if req_implementation:
+                        pip_params.extend(["--implementation", req_implementation])
+                pip_params.extend(["--platform", target_platform, "--no-deps", "-d", target_dir, req_line])
                 # pip_params = ["download", "--platform", target_platform, "--no-deps", "-d", target_dir, "-r", req_file]
                 # pip_params = ["download", "--platform", target_platform, "--no-deps", "--prefer-binary", "-d", target_dir, "-r", req_file]
                 try:
@@ -231,7 +242,7 @@ def get_requirements(req_cfg):
                         for f in source_files:
                             try:
                                 os.remove(f)
-                            except:
+                            except FileNotFoundError:
                                 pass
                         break
                 except subprocess.CalledProcessError:
@@ -246,7 +257,7 @@ def get_requirements(req_cfg):
             print("While it is possible to install the build dependencies, it is preferable to look at")
             print("pypi.org whether a previous version of the offending package comes with a wheel for")
             print("your target platform and then adjust the (frozen) dependencies to this version.")
-            if user_confirms("\nType 'y' to continue anyway (usually worth a try), Enter to abort. "):
+            if not user_confirms("\nType 'y' to continue anyway (usually worth a try), Enter to abort. "):
                 sys.exit(0)
 
 
@@ -278,6 +289,45 @@ def get_config(config_file):
     return config, config_str
 
 
+def get_inv_requirements_graph():
+    inv_req_graph = {}
+    for pkg in pkg_resources.working_set:
+        for required in pkg.requires():
+            req_name = canonicalize_name(required.name)
+            req_version_spec = str(required.specifier)
+            pkg_name = canonicalize_name(pkg.project_name)
+            pkg_version = pkg.version
+
+            if req_name not in inv_req_graph:
+                inv_req_graph[req_name] = [(pkg_name, pkg_version, req_version_spec)]
+            else:
+                inv_req_graph[req_name].append((pkg_name, pkg_version, req_version_spec))
+    return inv_req_graph
+
+
+def add_req_description(inv_req_graph, req_file_line):
+    indent = 30
+    line = req_file_line.strip()
+    req = re.split("[><= #]", line)[0]
+    req_canonical = canonicalize_name(req)
+    via_version_list = inv_req_graph[req_canonical] if req_canonical in inv_req_graph else []
+    comment = ""
+    for via_pkg, via_pkg_version, version in via_version_list:
+        if not via_pkg.startswith("-r "):
+            if comment:
+                comment += " and by "
+            comment += "{} {}".format(via_pkg, via_pkg_version)
+            if version:
+                comment += " ({}{})".format(req_canonical, version)
+    spaces = max(indent - len(line), 2)
+    if comment:
+        to_add = (spaces * " ") + "# required by " + comment
+        line_new = line + to_add
+    else:
+        line_new = line
+    return line_new
+
+
 def freeze_reqs(config_file):
     """Returns True if config has been changed and can be reloaded, False if user has to handle this themselves."""
     config, config_str = get_config(config_file)
@@ -290,13 +340,19 @@ def freeze_reqs(config_file):
         else:
             frozen_reqs_file_name, ext = os.path.splitext(old_reqs_file)
             frozen_reqs_file = "{}_frozen{}".format(frozen_reqs_file_name, ext)
-        freeze_cmd = [interpreter, "-m", "pip", "freeze", "--all"]  # --all is needed for setuptools
-        print(" ".join(freeze_cmd) + " > " + frozen_reqs_file)
-        with open(frozen_reqs_file, "w") as out:
-            # bla = subprocess.Popen(freeze_cmd).wait()
-            freeze_result = subprocess.Popen(freeze_cmd, stdout=out).wait()
-        if freeze_result != 0:
+
+        freeze_cmd = [interpreter, "-m", "pip", "freeze", "--all"]  # --all is needed for setuptools, wheel
+        try:
+            print(" ".join(freeze_cmd) + " > " + frozen_reqs_file)
+            freeze_output = subprocess.check_output(freeze_cmd).decode('ISO-8859-1')
+        except subprocess.CalledProcessError:
             raise RuntimeError("An error occurred when freezing the requirements.")
+        with open(frozen_reqs_file, "w") as out:
+            inv_req_graph = get_inv_requirements_graph()
+            for req_file_line in freeze_output.splitlines():
+                line_new = add_req_description(inv_req_graph, req_file_line)
+                out.write(line_new + "\n")
+
         print("Froze the requirements {} into {}".format(old_reqs_file, frozen_reqs_file))
 
         if frozen_reqs_file != old_reqs_file:
@@ -330,6 +386,7 @@ def freeze_reqs(config_file):
 
 
 def main():
+    # TODO: use Click
     args = sys.argv[1:]
     global yes_to_all
     if "-y" in args or "--yes-to-all" in args:
@@ -352,7 +409,7 @@ def main():
 
     config, config_str = get_config(config_file)
 
-    major, minor = str(config["deploy"]["python"]).split(".")
+    major, minor = str(config["deploy"]["requirements"]["python"]).split(".")
     if str(sys.version_info[0]) != major or str(sys.version_info[1]) != minor:
         raise AssertionError("Your Python version {}.{} does not match the target Python version {}.{}".format(
             sys.version_info[0], sys.version_info[1], major, minor

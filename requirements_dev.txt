@@ -9,3 +9,4 @@ yaml
 wheel
 pytest
 setuptools
+packaging
