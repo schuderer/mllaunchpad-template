@@ -6,13 +6,13 @@ if [ ! -f "$1" ]; then
     exit 1
 fi
 
-registry=deployed_apis.txt
+autorun=false
+if [[ "$2" == "auto" ]]; then
+    autorun=true
+fi
+
 file=$(basename "$1")
 name=$(basename -s .zip $1)
-api_name=$(cut -d'_' -f1 <<<"$name")
-api_version=$(cut -d'_' -f2 <<<"$name")
-api_major=$(cut -d'.' -f1 <<<"$api_version")
-api_root="$api_name/v$api_major/"
 directory=$(dirname "$1")
 origdir=$(pwd)
 cd $directory
@@ -20,17 +20,6 @@ cd $directory
 if [ -d "$name" ]; then
     echo "An API named '$name' is already deployed (directory exists). Aborting deployment."
     exit 2
-fi
-
-if [ -f "$registry" ]; then
-    set +e
-    grep -qF "$name" "$registry"
-    if [[ $? == 0 ]]; then
-        echo "An API named '$name' is already deployed (listed in $registry)."
-        echo "Aborting deployment."
-        exit 4
-    fi
-    set -e
 fi
 
 # Subshell emulating try-catch. In order to be able to remove the half-deployed api on failure
@@ -81,9 +70,6 @@ rm -rf $name/wheels
 
 deactivate
 
-echo "Registering API in $registry"
-echo "$name,$api_root" >>$registry
-
 echo "Successfully deployed API $name"
 )
 if [[ $? != 0 ]]; then
@@ -92,3 +78,35 @@ if [[ $? != 0 ]]; then
 fi
 
 cd $origdir
+
+if [[ "$autorun" == "true" ]]; then
+    echo "Attempting to take the API $name live automatically"
+    incompat="$(cut -d. -f1 <<<$name)"   # e.g. iris_0
+    otherinfo="$(./status.sh | grep "$incompat" | grep -v "$name")"
+    othername="$(cut -d, -f2 <<<"$otherinfo")"
+    if [ ! -z "$othername" ]; then
+        echo "Removing the incompatible API $othername from nginx config..."
+        ./stop.sh $othername
+    fi
+    ./run.sh $name auto
+    set +e
+    sudo nginx -t
+    if [[ $? != 0 ]]; then
+        echo "Nginx does not seem to like the current configuration. Use 'sudo nginx -T' to examine the nginx config."
+        echo "Killing the API process..."
+        ./stop.sh $name
+        ./stop.sh $name -f
+        exit 4
+    fi
+    set -e
+    sudo nginx -s reload
+    if [ ! -z "$othername" ]; then
+        echo "Stopping the incompatible API $othername's process..."
+        ./stop.sh $othername -f
+        sleep 1
+    fi
+    echo "The current API is now live and served via nginx."
+fi
+
+echo "Use run.sh/stop.sh to start/stop APIs and status.sh to see running APIs. Current status:"
+./status.sh

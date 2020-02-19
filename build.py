@@ -391,7 +391,7 @@ def main():
     global yes_to_all
     if "-y" in args or "--yes-to-all" in args:
         yes_to_all = True
-        args = [a for a in args if a != "-f" and a != "--yes-to-all"]
+        args = [a for a in args if a != "-y" and a != "--yes-to-all"]
 
     if "-f" in args or "--freeze" in args:
         if len(args) != 2:
@@ -403,9 +403,9 @@ def main():
         freeze_reqs(config_file)
         sys.exit(0)
 
-    if len(sys.argv) != 2:
+    if len(args) != 1:
         raise ValueError("Expected single argument with config file.")
-    config_file = sys.argv[1]
+    config_file = args[0]
 
     config, config_str = get_config(config_file)
 

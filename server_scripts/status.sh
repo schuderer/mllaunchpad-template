@@ -23,6 +23,10 @@ getstatus() {
     if [ -d "$fullpath/.venv" ]; then
         ok=OK
     fi
+    innginx=
+    if [ -f "$fullpath/NGINX.conf" ]; then
+        innginx=nginx
+    fi
     url="$(cat $fullpath/LAUNCHPAD_BASE_URL.txt)"
     # ps's H option prints hierarchically, with parent processes before child processes
     # so we can just take the first matching line, which will be the parent process.
@@ -30,12 +34,12 @@ getstatus() {
     port="$(sed -r "s/^.*127.0.0.1:([[:digit:]]+).*$/\1/g" <<<"$line")"
     ppid="$(sed -r "s/[^ ]+ +([0-9]+).*$/\1/g" <<<"$line")"
     if [[ ! -z "$line" ]]; then
-        echo "$ok,$name,$url,$ppid,$port"
+        echo "$ok,$name,$url,$ppid,$port,$innginx"
         if [[ -z "$quiet" ]]; then
             echo "API $name ($url) is running as PID $ppid and listening on port $port." >&2
         fi
     else
-        echo "$ok,$name,$url,,"
+        echo "$ok,$name,$url,,,$innginx"
         if [[ -z "$quiet" ]]; then 
             echo "API $name ($url) is NOT running." >&2
             if [ "$ok" != "OK" ]; then
