@@ -32,8 +32,7 @@ if [[ ! -z "$ppid" ]]; then
 fi
 
 echo "Setting environment variables for [$name] from envvars.ini..."
-mkfifo mypipe_$name
-grep -vE "^\s*#|^$" envvars.ini | sed -nr "/^\[$name\]/,/^\[/p" | grep -v "\[" > mypipe_$name &
+myvar=$(grep -vE "^\s*#|^$" envvars.ini | sed -nr "/^\[$name\]/,/^\[/p" | grep -v "\[")
 while read line; do
     varname="$(cut -d= -f1 <<<$line)"
     value="$(cut -d= -f2 <<<$line)"
@@ -41,8 +40,7 @@ while read line; do
     echo "Setting environment variable '$varname'"
     declare $varname=$value_dec
     export $varname
-done < mypipe_$name
-rm mypipe_$name
+done <<< "$myvar"
 
 cd $directory
 echo "Activating Python environment for API $name..."
