@@ -2,14 +2,32 @@
 
 scriptdir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
+usage() {
+    echo "Usage: $0 [-q] [api_dir]" 1>&2
+    echo "Outputs status of all APIs or of API <api_dir> (if specified)." 1>&2
+    echo "The output columns are: api_name, base_url, process, local_port" 1>&2
+    echo "Options: -q    Quiet mode (suppress helpful messages)." 1>&2
+    echo "         -h    Show this message and exit." 1>&2
+}
+
+while getopts ":qh" o; do
+    case $o in
+        q)
+            quiet="1"
+            ;;
+        h)
+            usage
+            exit 0
+            ;;
+    esac
+done
+shift $((OPTIND - 1 ))
 
 getstatus() {
     if [ ! -d "$1" ]; then
-        echo "Could not find API directory named '$1'"
+        echo "ERROR: Could not find API directory named '$1'" 1>&2
+        echo "Type '$0 -h' for help." 1>&2
         exit 1
-    fi
-    if [[ ! -z "$2" ]]; then
-        quiet="1"
     fi
 
     name=$(basename "$1")
@@ -36,15 +54,15 @@ getstatus() {
     if [[ ! -z "$line" ]]; then
         echo "$ok,$name,$url,$ppid,$port,$innginx"
         if [[ -z "$quiet" ]]; then
-            echo "API $name ($url) is running as PID $ppid and listening on port $port." >&2
+            echo "API $name ($url) is running as PID $ppid and listening on port $port." 1>&2
         fi
     else
         echo "$ok,$name,$url,,,$innginx"
         if [[ -z "$quiet" ]]; then 
-            echo "API $name ($url) is NOT running." >&2
+            echo "API $name ($url) is NOT running." 1>&2
             if [ "$ok" != "OK" ]; then
-                echo "WARNING: API $name does not appear to be deployed correctly." >&2
-                echo "         It is advisable to undeploy/delete and then redeploy $name." >&2
+                echo "WARNING: API $name does not appear to be deployed correctly." 1>&2
+                echo "         It is advisable to undeploy/delete and then redeploy $name." 1>&2
             fi
         fi
     fi
@@ -53,7 +71,7 @@ getstatus() {
 }
 
 if [[ -z "$1" ]]; then
-    # echo "api name,base url,process,port on 127.0.0.1"
+    # echo "api_name,base_url,process,local_port" 1>&2
     # Find and print status of all deployed APIs
     validapis=""
     for dir in $scriptdir/*/; do
@@ -66,13 +84,13 @@ if [[ -z "$1" ]]; then
     done
     # Check for running APIs that do NOT have a folder (should not exist)
     apispath="$(cd $fullpath/.. && pwd)"
-    #ps -ef | grep -v grep | grep -E "$apispath/($validapis)/\.venv" >&2
+    #ps -ef | grep -v grep | grep -E "$apispath/($validapis)/\.venv" 1>&2
     tput setaf 1
-    ps -ef | grep -v grep | grep "$apispath/.*/\.venv" | grep -vE "$apispath/($validapis)/\.venv" >&2
+    ps -ef | grep -v grep | grep "$apispath/.*/\.venv" | grep -vE "$apispath/($validapis)/\.venv" 1>&2
     if [ $? == 0 ]; then
-        echo ""
-        echo "WARNING: There are rogue APIs running (which listen to a port but don't have a deployed directory)." >&2
-        echo "         See 'ps' output above these lines for details." >&2
+        echo "" 1>&2
+        echo "WARNING: There are rogue APIs running (which listen to a port but don't have a deployed directory)." 1>&2
+        echo "         See 'ps' output above these lines for details." 1>&2
     fi
     tput sgr0
 else
