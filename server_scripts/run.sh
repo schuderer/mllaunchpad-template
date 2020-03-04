@@ -85,7 +85,7 @@ source .venv/bin/activate
 
 echo "Starting Gunicorn daemon..." 1>&2
 gunicorn="$(pwd)/.venv/bin/python3 -m gunicorn.app.wsgiapp"
-$gunicorn "${@:3}" --daemon --log-file $logpath/$name.log --capture-output --workers 1 --bind 127.0.0.1:$port mllaunchpad.wsgi
+$gunicorn "${@:3}" --daemon --log-file $logpath/$name.log --capture-output --workers 4 --bind 127.0.0.1:$port mllaunchpad.wsgi
 #$gunicorn "${@:3}" --daemon --log-file $logpath/$name.log --capture-output --workers 1 --bind 127.0.0.1:$port mllaunchpad.wsgi
 
 deactivate

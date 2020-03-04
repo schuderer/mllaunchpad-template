@@ -46,7 +46,7 @@ deploy:
   requirements:
     python: '3.6'
     platforms: [manylinux2010_x86_64, manylinux1_x86_64, linux_x86_64]  # manylinux2010 only supported by pip>=19.0
-    file: requirements_frozen.txt  # Please use frozen requirements for reproducibility. How to create: https://github.com/schuderer/mllaunchpad/issues/60
+    file: requirements.txt  # Please use frozen requirements for reproducibility. How to create: https://github.com/schuderer/mllaunchpad/issues/60
     save_to: wheels
     vulnerability_db: C:/dev/python_vulnerability_db  # If empty string "", tries to get information from pyup's safety-db website (source: https://raw.githubusercontent.com/pyupio/safety-db/master/data/)
     pip_index_url: ""  # Empty string "" to use the default (which is usually pypi.org, but depends on your pip config).
