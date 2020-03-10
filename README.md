@@ -67,7 +67,13 @@ Add/replace/adapt/develop:
  - `requirements.txt` to contain your model's requirements
  - `requirements_dev.txt` to contain your development requirements (as well as a reference to the model's requirements `-r requirements.txt`)
 
-Please refer to the documentation at https://mllaunchpad.readthedocs.io on how to use ML Launchpad.
+For testing your code on your local machine, you need to install your development requirements:
+
+```console
+> pip install -r requirements_dev.txt
+```
+
+Please refer to the documentation at https://mllaunchpad.readthedocs.io on how to develop in and use ML Launchpad.
 
 To build a deployment artifact, create a proper `config_deploy.yml` (which specifies the *unfrozen* `requirements.txt` for now), and run:
 
