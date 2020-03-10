@@ -1,0 +1,1 @@
+/opt/rh/rh-python36/root/bin/python3

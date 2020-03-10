@@ -10,6 +10,7 @@ usage() {
     echo "         -h    Show this message and exit." 1>&2
 }
 
+force=false
 while getopts ":fh" o; do
     case $o in
         f)
@@ -23,6 +24,10 @@ while getopts ":fh" o; do
 done
 shift $((OPTIND - 1 ))
 
+(
+echo "=============================================================="
+echo "$(date) Undeploying $@ with force=$force"
+
 if [ -z "$1" ]; then
     echo "ERROR: Missing argument: API name." 1>&2
     echo "Type '$0 -h' for help." 1>&2
@@ -30,7 +35,7 @@ if [ -z "$1" ]; then
 fi
 
 name=$(basename -s .zip $1)
-base_dir=$(dirname "$1")
+qqbase_dir=$(dirname "$1")
 origdir=$(pwd)
 cd $scriptdir
 
@@ -63,5 +68,6 @@ rm -rf $name/
 cd $origdir
 
 echo "Sucessfully undeployed API $name" 1>&2
+) 2>&1 | tee -a "$(cat LOGPATH.txt)/undeploy.log"
 
 echo "[Use run.sh/stop.sh to start/stop APIs and status.sh to see the status of deployed APIs.]" 1>&2

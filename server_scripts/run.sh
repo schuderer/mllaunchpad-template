@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 set -e
 
-logpath="/var/log/mllp"
+logpath="$(cat LOGPATH.txt)"
 scriptdir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 usage() {
@@ -117,6 +117,7 @@ port="$(cut -d, -f5 <<<"$runinfo")"
 echo "location /$url {">$nginxconf
 echo "    proxy_pass http://127.0.0.1:$port/$url;">>$nginxconf
 echo "}">>$nginxconf
+chmod o+r "$nginxconf"
 
 echo "Started Gunicorn daemon for API $name on 127.0.0.1:$port." 1>&2
 echo "Logging to $logpath/$name.log. Use status.sh to check for running/stopped APIs." 1>&2

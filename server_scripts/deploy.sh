@@ -13,6 +13,7 @@ usage() {
     echo "         -h     Show this message and exit." 1>&2
 }
 
+autorun=false
 while getopts ":ah" o; do
     case $o in
         a)
@@ -25,6 +26,10 @@ while getopts ":ah" o; do
     esac
 done
 shift $((OPTIND - 1 ))
+
+(
+echo "=============================================================="
+echo "$(date) Deploying $@ with autorun=$autorun"
 
 if [ ! -f "$1" ]; then
     echo "ERROR: Could not find file named '$1'" 1>&2
@@ -50,6 +55,9 @@ set +e
 set -e
 echo "Extracting $1 to $name/..." 1>&2
 unzip $file -d $name/
+
+# The nginx user must be able to access this directory
+chmod o+rx $name/
 
 echo "Checking required resources..." 1>&2
 mapfile -t req_files <"$name/LAUNCHPAD_REQ_FILES.txt"
@@ -133,5 +141,6 @@ else
         echo "The API $name is now live and being served via nginx." 1>&2
     fi
 fi
+) 2>&1 | tee -a "$(cat LOGPATH.txt)/deploy.log"
 
 echo "[Use run.sh/stop.sh to start/stop APIs and status.sh to see the status of deployed APIs.]" 1>&2
