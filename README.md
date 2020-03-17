@@ -26,6 +26,7 @@ If you use Anaconda as your (only) Python distribution, you need to first create
 ```console
 > conda create -n python36 python=3.6
 > conda activate python36
+> conda install pip pyyaml packaging  # requirements of the build.py script
 ```
 
 If you get an error about failed SSL verification, you might be behind a corporate firewall and may need to make your certificate known to conda (but please don't use `conda config --set ssl_verify false`!)
@@ -81,8 +82,11 @@ To build a deployment artifact, create a proper `config_deploy.yml` (which speci
 > python build.py config_deploy.yml
 ```
 
+**Tip:** If you are using a conda-based setup and you get an error like "Creating temporary environment ... ensurepip --upgrade ... returned non-zero exit status", you may need to deactivate your inner development venv (using `deactivate`), and make sure that only your plain conda environment from earlier is active (`conda activate python36`). The reason is that a mix of conda and venv does not play well with nested environments.
+
 The script will ask you a bunch of questions. If in doubt, "y" is always the safest answer. You can use the "-y" parameter to automatically answer "y" to all questions: `python build.py -y config_deploy.yml`
 
 One of the questions `build.py` will ask is whether to freeze (i.e. to pin) your unfrozen `requirements.txt`. Answer "y", and it will do it and automatically modify the config to use the frozen requirements from now on if you answer "y" to *that* question, too.
 
 Once done, the directory `build` will contain the zipped deployment artifact. Move it to your server somehow. You may find the scripts in https://github.com/schuderer/mllaunchpad-template/tree/master/server_scripts useful.
+

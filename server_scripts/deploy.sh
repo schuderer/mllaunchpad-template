@@ -59,6 +59,9 @@ unzip $file -d $name/
 # The nginx user must be able to access this directory
 chmod o+rx $name/
 
+# Remove any stray world-write bits inherited from the zip file
+chmod o-w -R $name/
+
 echo "Checking required resources..." 1>&2
 mapfile -t req_files <"$name/LAUNCHPAD_REQ_FILES.txt"
 for req_file in "${req_files[@]}"
