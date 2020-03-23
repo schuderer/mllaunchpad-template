@@ -71,7 +71,7 @@ mkfifo mypipe_$name
 grep -vE "^\s*#|^$" "$base_dir/envvars.ini" | sed -nr "/^\[$name\]/,/^\[/p" | grep -v "\[" > mypipe_$name &
 while read line; do
     varname="$(cut -d= -f1 <<<$line)"
-    value="$(cut -d= -f2 <<<$line)"
+    value="$(cut -d= -f2- <<<$line)"
     value_dec="$(base64 -d <<<$value)"
     echo "Setting environment variable '$varname'" 1>&2
     declare $varname=$value_dec
