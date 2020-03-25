@@ -57,7 +57,7 @@ base_dir=$(dirname "$1")
 origdir=$(pwd)
 cd $base_dir
 
-runinfo="$($scriptdir/status.sh $name)"
+runinfo="$($scriptdir/status.sh -q $name)" 
 ppid="$(cut -d, -f4 <<<"$runinfo")"
 
 if [[ ! -z "$ppid" ]]; then
@@ -92,15 +92,15 @@ deactivate
 
 cd $scriptdir
 
-sleep 1
+sleep 3
 waiting=10
-runinfo="$(./status.sh $name)" 2>/dev/null
+runinfo="$(./status.sh -q $name)"
 ppid="$(cut -d, -f4 <<<"$runinfo")"
 while [[ -z "$ppid" ]]; do
-    runinfo="$(./status.sh $name)" 2>/dev/null
+    runinfo="$(./status.sh -q $name)"
     ppid="$(cut -d, -f4 <<<"$runinfo")"
     echo -n "."
-    let waited--
+    let waiting--
     if (( $waiting <= 0 )); then
         echo "ERROR: Could not start API $name." 1>&2
         echo "Type '$0 -h' for help." 1>&2

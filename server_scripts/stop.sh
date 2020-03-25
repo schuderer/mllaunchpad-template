@@ -48,7 +48,7 @@ base_dir=$(dirname "$1")
 origdir=$(pwd)
 cd $base_dir
 
-runinfo="$($scriptdir/status.sh $name)"
+runinfo="$($scriptdir/status.sh -q $name)"
 ppid="$(cut -d, -f4 <<<"$runinfo")"
 url="$(cut -d, -f3 <<<"$runinfo")"
 port="$(cut -d, -f5 <<<"$runinfo")"

@@ -35,7 +35,7 @@ if [ -z "$1" ]; then
 fi
 
 name=$(basename -s .zip $1)
-qqbase_dir=$(dirname "$1")
+base_dir=$(dirname "$1")
 origdir=$(pwd)
 cd $scriptdir
 

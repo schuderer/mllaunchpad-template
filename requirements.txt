@@ -32,3 +32,6 @@ mllaunchpad
 scikit-learn
 pandas
 gunicorn
+
+# Added by build script:
+setuptools

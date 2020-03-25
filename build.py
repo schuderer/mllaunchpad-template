@@ -2,13 +2,14 @@ from contextlib import contextmanager
 from glob import glob
 import os
 import shutil
-from packaging.utils import canonicalize_name
 import pkg_resources
 import platform
 import re
 import subprocess
 import sys
 import venv
+from packaging.utils import canonicalize_name
+from typing import Dict, List
 
 import yaml
 from zipfile import ZipFile
@@ -30,10 +31,14 @@ required_config = {
             "save_to": {},
             "vulnerability_db": {},
         },
+        "test_query": {
+            "__check__": lambda val: "test query must not start with '/'" if val.startswith("/") else None
+        },
     },
     "api": {
-        "name": {},
-        "version": {},
+        "name": {
+            "__check__": lambda val: "api name must not contain '_'" if "_" in val else None
+        },
     },
 }
 venv_location = ".venv_temp_deploy"
@@ -42,7 +47,9 @@ deployed_config_name = "LAUNCHPAD_CFG.yml"
 deployed_requirements_name = "LAUNCHPAD_REQ.txt"
 required_python_name = "LAUNCHPAD_REQ_PYTHON.txt"
 required_files_name = "LAUNCHPAD_REQ_FILES.txt"
+pip_command_file_name = "LAUNCHPAD_REQ_INSTALL.txt"
 base_url_file_name = "LAUNCHPAD_BASE_URL.txt"
+test_url_file_name = "LAUNCHPAD_TEST_URL.txt"
 constrain_download = False  # Experimental: specify python version and python implementation in 'pip download' command
 
 # Unfortunately, some packages have BUILD requirements that they don't
@@ -91,9 +98,12 @@ def validate_config(config_dict, required, path=""):
         path_start = (path + ":") if path else ""
         if item not in config_dict:
             raise ValueError("Missing key in config file: {}".format(path_start + item))
+        if "__check__" in required[item]:
+            problem = required[item]["__check__"](config_dict[item])
+            if problem:
+                raise AssertionError("Config error: {} ({}: {})".format(problem, path_start + item, config_dict[item]))
+            del(required[item]["__check__"])
         validate_config(config_dict[item], required[item], path_start + item)
-    if path == "" and "_" in config_dict["api"]["name"]:
-        raise AssertionError("Config's api:name '{}' must not contain underscores".format(config_dict["api"]["name"]))
 
 
 @contextmanager
@@ -158,14 +168,18 @@ def load_req_file(req_file):
         return req_str
 
 
-def run_pip(interpreter, req_cfg, params):
+def pip_extra_options(req_cfg: Dict) -> List[str]:
     url_params = []
     if "pip_index_url" in req_cfg and req_cfg["pip_index_url"]:
         url_params.extend(["--index-url", req_cfg["pip_index_url"]])
     if "pip_trusted_hosts" in req_cfg:
         for host in req_cfg["pip_trusted_hosts"]:
             url_params.extend(["--trusted-host", host])
-    cmd = [interpreter, "-m", "pip", "--disable-pip-version-check", *params, *url_params]
+    return ["--disable-pip-version-check", *url_params]
+
+
+def run_pip(interpreter, req_cfg, params):
+    cmd = [interpreter, "-m", "pip", *params, *pip_extra_options(req_cfg)]
     print(" ".join(cmd))
     output = subprocess.check_output(cmd).decode('ISO-8859-1')
     print(output)
@@ -438,7 +452,13 @@ def main():
 
     dependency_vulnerability_check(req_cfg)
 
-    get_requirements(req_cfg)
+    if "save_to" in req_cfg and req_cfg["save_to"]:
+        get_requirements(req_cfg)
+        req_install_str = "pip install --disable-pip-version-check --upgrade --no-index --find-links ./wheels/ -r ./{}".format(deployed_requirements_name)
+    else:
+        print("NOTE: The server will need to have access to a pip-compatible repository.\n"
+              "      (No wheels downloaded as 'deploy:requirements:save_to' is not specified.)\n")
+        req_install_str = " ".join(["pip", "install", "--upgrade", "-r", deployed_requirements_name, *pip_extra_options(req_cfg)])
 
     files = []
     for file_pattern in config["deploy"]["include"]:
@@ -455,7 +475,7 @@ def main():
 
     delete_dir(build_path)
     create_dir(build_path)
-    zip_name = os.path.join(build_path, "{}_{}.zip".format(config["api"]["name"], config["api"]["version"]))
+    zip_name = os.path.join(build_path, "{}_{}.zip".format(config["api"]["name"], config["model"]["version"]))
     print("Packaging zip file {}...".format(zip_name))
     with ZipFile(zip_name, 'w') as zip_file:
         for file in files:
@@ -463,10 +483,12 @@ def main():
             zip_file.write(file)
         print("Adding file {}".format(deployed_config_name))
         zip_file.writestr(deployed_config_name, config_str)
-        print("Adding file {}".format(deployed_requirements_name))
-        zip_file.writestr(deployed_requirements_name, req_str)
         print("Adding file {}".format(required_python_name))
         zip_file.writestr(required_python_name, "{}{}".format(major, minor))
+        print("Adding file {}".format(deployed_requirements_name))
+        zip_file.writestr(deployed_requirements_name, req_str)
+        print("Adding file {}".format(pip_command_file_name))
+        zip_file.writestr(pip_command_file_name, req_install_str)
         print("Adding file {}".format(required_files_name))
         required_files_str = ""
         if "deployment_requires" in config["deploy"]:
@@ -474,8 +496,13 @@ def main():
         zip_file.writestr(required_files_name, required_files_str)
         print("Adding file {}".format(base_url_file_name))
         base_url = "{}/v{}/".format(config["api"]["name"],
-                                    config["api"]["version"].split(".")[0])
+                                    config["model"]["version"].split(".")[0])
         zip_file.writestr(base_url_file_name, base_url)
+        print("Adding file {}".format(test_url_file_name))
+        test_url = config["deploy"]["test_query"]
+        if not test_url.startswith(base_url):
+            test_url = base_url + test_url
+        zip_file.writestr(test_url_file_name, "/" + test_url)
 
     os.chdir(old_working_dir)
     print("\nDone. Build artifacts can be found in the '{}' subdirectory.".format(build_path))

@@ -59,7 +59,7 @@ unzip $file -d $name/
 # The nginx user must be able to access this directory
 chmod o+rx $name/
 
-# Remove any stray world-write bits inherited from the zip file
+# Remove any stray other-write bits from the zip file
 chmod o-w -R $name/
 
 echo "Checking required resources..." 1>&2
@@ -99,9 +99,13 @@ else
     exit 3
 fi
 
+cd $name/
 echo "Installing Python requirements..." 1>&2
-python3 -m pip install --upgrade --no-index --find-links $name/wheels/ -r $name/LAUNCHPAD_REQ.txt
+pip_command="$(cat LAUNCHPAD_REQ_INSTALL.txt)"
+echo "$pip_command" 1>&2
+python3 -m $pip_command
 rm -rf $name/wheels/
+cd $scriptdir
 
 deactivate
 
@@ -118,7 +122,7 @@ else
     if [[ "$autorun" == "true" ]]; then
         echo "Attempting to take the API $name live automatically" 1>&2
         incompat="$(cut -d. -f1 <<<$name)"   # e.g. iris_0
-        otherinfo="$(./status.sh | grep "$incompat" | grep -v "$name")"
+        otherinfo="$(./status.sh -q | grep "$incompat" | grep -v "$name")"
         othername="$(cut -d, -f2 <<<"$otherinfo")"
         if [ ! -z "$othername" ]; then
             echo "Removing the incompatible API $othername from nginx config..." 1>&2
@@ -142,6 +146,17 @@ else
             sleep 1
         fi
         echo "The API $name is now live and being served via nginx." 1>&2
+        echo "" 1>&2
+        sleep 1
+        echo "Testing the test url using LAUNCHPAD_TEST_URL.txt:" 1>&2
+        test_url="$(cat $name/LAUNCHPAD_TEST_URL.txt)"
+        set +e
+        echo "curl -fk \"https://localhost$test_url\"" 1>&2
+        curl -fk "https://localhost$test_url" 1>&2
+        if [[ $? != 0 ]]; then
+             echo "ERROR: The test URL does not seem to work. You'd better look into this." 1>&2
+        fi
+        set -e
     fi
 fi
 ) 2>&1 | tee -a "$(cat LOGPATH.txt)/deploy.log"
