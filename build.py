@@ -288,7 +288,7 @@ def get_model(config, config_file):
         if user_confirms("Type 'y' to (re)train model {} now, Enter to continue without training: ".format(model_name)):
             with python_interpreter() as interpreter:
                 install_reqs(interpreter, config)
-                train_cmd = [interpreter, "-m", "mllaunchpad", "-c", config_file, "-t"]
+                train_cmd = [interpreter, "-m", "mllaunchpad", "-c", config_file, "train"]
                 print(" ".join(train_cmd))
                 train_result = subprocess.Popen(train_cmd).wait()
                 if train_result != 0:
