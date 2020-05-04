@@ -20,7 +20,9 @@ required_config = {
         "location": {},
     },
     "model": {
-        "name": {},
+        "name": {
+            "__check__": lambda val: "model name must not contain '_'" if "_" in val else None
+        },
         "version": {},
     },
     "deploy": {
@@ -37,9 +39,7 @@ required_config = {
         },
     },
     "api": {
-        "name": {
-            "__check__": lambda val: "api name must not contain '_'" if "_" in val else None
-        },
+        "name": {},
     },
 }
 venv_location = ".venv_temp_deploy"
@@ -513,7 +513,7 @@ def main():
 
     delete_dir(build_path)
     create_dir(build_path)
-    zip_name = os.path.join(build_path, "{}_{}.zip".format(config["api"]["name"], config["model"]["version"]))
+    zip_name = os.path.join(build_path, "{}_{}.zip".format(config["model"]["name"], config["model"]["version"]))
     print("Packaging zip file {}...".format(zip_name))
     with ZipFile(zip_name, 'w') as zip_file:
         for file in files:
@@ -538,6 +538,8 @@ def main():
         zip_file.writestr(base_url_file_name, base_url)
         print("Adding file {}".format(test_url_file_name))
         test_url = config["deploy"]["test_query"]
+        if test_url.startswith("/"):
+            test_url = test_url[1:]
         if not test_url.startswith(base_url):
             test_url = base_url + test_url
         zip_file.writestr(test_url_file_name, "/" + test_url)
