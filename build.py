@@ -1,5 +1,4 @@
-from contextlib import contextmanager
-from glob import glob
+import datetime
 import os
 import shutil
 import pkg_resources
@@ -8,11 +7,13 @@ import re
 import subprocess
 import sys
 import venv
+from contextlib import contextmanager
+from glob import glob
 from packaging.utils import canonicalize_name
 from typing import Dict, List
+from zipfile import ZipFile
 
 import yaml
-from zipfile import ZipFile
 
 required_config = {
     "model_store": {
@@ -50,6 +51,7 @@ required_files_name = "LAUNCHPAD_REQ_FILES.txt"
 pip_command_file_name = "LAUNCHPAD_REQ_INSTALL.txt"
 base_url_file_name = "LAUNCHPAD_BASE_URL.txt"
 test_url_file_name = "LAUNCHPAD_TEST_URL.txt"
+frozen_infix = "_frozen"
 constrain_download = False  # Experimental: specify python version and python implementation in 'pip download' command
 
 # Unfortunately, some packages have BUILD requirements that they don't
@@ -126,6 +128,41 @@ class RequirementsNeedFreezing(Exception):
 
 
 def load_req_file(req_file):
+    # Check whether an unfrozen version of the file exists.
+    if frozen_infix in req_file:
+        unfrozen_req_file = req_file.replace(frozen_infix, "")
+        if os.path.exists(unfrozen_req_file):
+            t_unfrozen = os.path.getmtime(unfrozen_req_file)
+            t_frozen = os.path.getmtime(req_file)
+            if t_unfrozen > t_frozen:
+                t_str_unfrozen = datetime.datetime.fromtimestamp(t_unfrozen).strftime("%Y-%m-%d %H:%M:%S")
+                t_str_frozen = datetime.datetime.fromtimestamp(t_frozen).strftime("%Y-%m-%d %H:%M:%S")
+                print("\n\n################################################################\n"
+                      "ERROR: Your unfrozen requirements file {} (last changed on {})\n"
+                      "is more recent than your frozen requirements file {} (last changed on {}).\n\n"
+                      "You most likely modified the unfrozen file AFTER freezing the requirements.\n"
+                      "Please note that, from the first time on that your requirements have been frozen,\n"
+                      "you are supposed to keep the frozen requirements file {} up-to-date yourself.\n"
+                      "Any changes to the old, unfrozen requirements file will NOT be picked up\n"
+                      "automatically by the frozen requirements file (these changes will be IGNORED).\n\n"
+                      "To fix this, you have the following options:\n"
+                      " 1. PREFERRED: Update the FROZEN requirements file {} to contain all your requirements and retry\n"
+                      "    (you don't need to add a version -- the build script will offer to re-freeze automatically).\n"
+                      " 2. Check that the UNFROZEN requirements file {} contains all your direct requirements,\n"
+                      "    change the config's 'deploy:requirements:file:' to it, and run this build script to re-freeze\n"
+                      "    from scratch.\n"
+                      " 3. If this message is in error, modify/save {} to get rid of this message.".format(
+                    unfrozen_req_file,
+                    t_str_unfrozen,
+                    req_file,
+                    t_str_frozen,
+                    req_file,
+                    req_file,
+                    unfrozen_req_file,
+                    req_file
+                ))
+                sys.exit(1)
+
     # Check for implicit dependencies of requirements
     with open(req_file, "r+") as f:
         packages = [re.split("[=>< #]", l.strip())[0] for l in f.readlines()]
@@ -349,11 +386,11 @@ def freeze_reqs(config_file):
     with python_interpreter() as interpreter:
         install_reqs(interpreter, config)
         old_reqs_file = config["deploy"]["requirements"]["file"]
-        if "_frozen." in old_reqs_file:
+        if "{}.".format(frozen_infix) in old_reqs_file:
             frozen_reqs_file = old_reqs_file
         else:
             frozen_reqs_file_name, ext = os.path.splitext(old_reqs_file)
-            frozen_reqs_file = "{}_frozen{}".format(frozen_reqs_file_name, ext)
+            frozen_reqs_file = "{}{}{}".format(frozen_reqs_file_name, frozen_infix, ext)
 
         freeze_cmd = [interpreter, "-m", "pip", "freeze", "--all"]  # --all is needed for setuptools, wheel
         try:
@@ -411,8 +448,9 @@ def main():
         if len(args) != 2:
             raise ValueError("Freezing requirements requires a config file with a reference to the unfrozen file in \n"
                              "deploy:requirements:file. "
-                             "It will create a <filename>_frozen.txt and change \n"
-                             "your deployment config's deploy:requirements:file to <filename>_frozen.txt.")
+                             "It will create a <filename>{}.txt and change \n"
+                             "your deployment config's deploy:requirements:file "
+                             "to <filename>{}.txt.".format(frozen_infix, frozen_infix))
         config_file = [a for a in args if a != "-f" and a != "--freeze"][0]
         freeze_reqs(config_file)
         sys.exit(0)

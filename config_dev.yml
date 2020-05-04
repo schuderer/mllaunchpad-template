@@ -1,5 +1,6 @@
-#plugins:
-#  - examples.bogusdatasource
+# Depending on your project setup, it might be smart for every developer
+# to have their own private dev configuration and .gitignore this file
+# (e.g. if different developers keep their test/dev data in different places).
 
 datasources:
   petals:
