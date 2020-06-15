@@ -59,7 +59,12 @@ if [ "$train" = "true" ]; then
     echo "Starting training for $name..." 1>&2
     cd $name
     source .venv/bin/activate
-    python -m mllaunchpad -t
+    python -m mllaunchpad --version 2>&1 | grep "version 0"
+    if [ $? == 0 ]; then
+        python -m mllaunchpad --train
+    else
+        python -m mllaunchpad train
+    fi
     deactivate
     echo "Finished training of $name." 1>&2
 fi

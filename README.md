@@ -17,7 +17,6 @@ Git-clone https://github.com/schuderer/mllaunchpad-template into `c:\dev\code\my
 
 The following are not really needed and can be deleted:
  - `server-scripts `
- - `requirements_frozen.txt`
 
 Now that we have the project directory set up, let's get our Python development virtual environment ready:
 
