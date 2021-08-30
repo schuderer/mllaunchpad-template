@@ -31,7 +31,6 @@ required_config = {
             "python": {},
             "platforms": {},
             "file": {},
-            "save_to": {},
             "vulnerability_db": {},
         },
         "test_query": {
@@ -49,6 +48,7 @@ deployed_requirements_name = "LAUNCHPAD_REQ.txt"
 required_python_name = "LAUNCHPAD_REQ_PYTHON.txt"
 required_files_name = "LAUNCHPAD_REQ_FILES.txt"
 pip_command_file_name = "LAUNCHPAD_REQ_INSTALL.txt"
+pip_cert_file_name = "LAUNCHPAD_PIP_CERT.txt"
 base_url_file_name = "LAUNCHPAD_BASE_URL.txt"
 test_url_file_name = "LAUNCHPAD_TEST_URL.txt"
 frozen_infix = "_frozen"
@@ -212,6 +212,8 @@ def pip_extra_options(req_cfg: Dict) -> List[str]:
     if "pip_trusted_hosts" in req_cfg:
         for host in req_cfg["pip_trusted_hosts"]:
             url_params.extend(["--trusted-host", host])
+    if "pip_cert" in req_cfg and req_cfg["pip_cert"]:
+        url_params.extend(["--cert", req_cfg["pip_cert"]])
     return ["--disable-pip-version-check", *url_params]
 
 
@@ -495,15 +497,18 @@ def main():
 
     dependency_vulnerability_check(req_cfg)
 
+    files = []
     if "save_to" in req_cfg and req_cfg["save_to"]:
         get_requirements(req_cfg)
         req_install_str = "pip install --disable-pip-version-check --upgrade --no-index --find-links ./wheels/ -r ./{}".format(deployed_requirements_name)
     else:
         print("NOTE: The server will need to have access to a pip-compatible repository.\n"
               "      (No wheels downloaded as 'deploy:requirements:save_to' is not specified.)\n")
+        if req_cfg.get("pip_cert"):
+            files.append((req_cfg["pip_cert"], pip_cert_file_name))
+            req_cfg["pip_cert"] = pip_cert_file_name
         req_install_str = " ".join(["pip", "install", "--upgrade", "-r", deployed_requirements_name, *pip_extra_options(req_cfg)])
 
-    files = []
     for file_pattern in config["deploy"]["include"]:
         expanded_files = glob(file_pattern, recursive=True)
         filtered_files = []
@@ -522,8 +527,12 @@ def main():
     print("Packaging zip file {}...".format(zip_name))
     with ZipFile(zip_name, 'w') as zip_file:
         for file in files:
-            print("Adding file {}".format(file))
-            zip_file.write(file)
+            if isinstance(file, tuple):
+                print("Adding file {} as {}".format(file[0], file[1]))
+                zip_file.write(file[0], arcname=file[1])
+            else:
+                print("Adding file {}".format(file))
+                zip_file.write(file)
         print("Adding file {}".format(deployed_config_name))
         zip_file.writestr(deployed_config_name, config_str)
         print("Adding file {}".format(required_python_name))

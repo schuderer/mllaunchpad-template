@@ -36,7 +36,7 @@ deploy:
     - app/*
     - '*.yml'
     - '*.raml'
-    - wheels/*
+    # - wheels/*  # Needed if you need to include dependencies in the deployment artifact (used with "requirements:save_to")
     - model_store/*
   exclude:  # Exclude files with any of these strings in their path
     - __pycache__
@@ -46,10 +46,11 @@ deploy:
     python: '3.6'
     platforms: [manylinux2010_x86_64, manylinux1_x86_64, linux_x86_64]  # manylinux2010 only supported by pip>=19.0
     file: requirements.txt  # Please use frozen requirements for reproducibility. How to create: https://github.com/schuderer/mllaunchpad/issues/60
-    save_to: wheels  # Leave out or empty to have server install from pip-repo (PyPI or as specified in pip_index_url) instead of deploying downloaded wheels
+    # save_to: wheels  # Optional. Download the dependencies as wheels to this location and include it within the deployment artifact. Leave out or empty to have server deployment install dependencies from a package repository (PyPI or as specified in pip_index_url) instead.
     vulnerability_db: C:/dev/python_vulnerability_db  # If empty string "", tries to get information from pyup's safety-db website (source: https://raw.githubusercontent.com/pyupio/safety-db/master/data/)
-    pip_index_url: ""  # Empty string "" to use the default (which is usually pypi.org, but depends on your pip config).
-    pip_trusted_hosts: []  # WARNING: Only ever use when told to use, and even then only as an exception, and only for hosts in the local network!
+    pip_index_url: ""  # Optionally use another package repository (such as an in-company proxy like Nexus). Empty string "" to use the default (which is usually pypi.org, but depends on your pip config).
+    pip_cert: ""  # Optional certificate for pip to use. Commonly used for company-internal/self-signed certificates.
+    pip_trusted_hosts: []  # Optional host and port for specified index-url. WARNING: Only ever use when told to use, and even then only as an exception, and only for hosts in the local network!
   deployment_requires: []  # external files or directories that have to exist on the server
   # A test query (only the part that comes after e.g. /apiname/v1/) to be called regularly to test your API:
   # Note: If your model does batch prediction or has side effects that are not useful to trigger for test purposes

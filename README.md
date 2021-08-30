@@ -81,6 +81,8 @@ To build a deployment artifact, create a proper `config_deploy.yml` (which speci
 > python build.py config_deploy.yml
 ```
 
+**Note:** Once you have reached the point of your first release (at the latest), it is recommended to keep using the frozen requirements and maintain those from then on. The automatic freezing is just a convenience feature and is not meant to replace proper dependency management.
+
 **Tip:** If you are using a conda-based setup and you get an error like "Creating temporary environment ... ensurepip --upgrade ... returned non-zero exit status", you may need to deactivate your inner development venv (using `deactivate`), and make sure that only your plain conda environment from earlier is active (`conda activate python36`). The reason is that a mix of conda and venv does not play well with nested environments.
 
 The script will ask you a bunch of questions. If in doubt, "y" is always the safest answer. You can use the "-y" parameter to automatically answer "y" to all questions: `python build.py -y config_deploy.yml`
