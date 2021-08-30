@@ -266,7 +266,7 @@ def get_requirements(req_cfg):
         with open(req_file) as rf:
             req_lines_raw = rf.read().splitlines()
             req_lines = [l.split(" ")[0] for l in req_lines_raw]
-        for req_line in req_lines:
+        for req_line in [l for l in req_lines if not l.startswith("-e")]:
             source_files = []
             for target_platform in target_platforms:
                 pip_params = ["download"]
