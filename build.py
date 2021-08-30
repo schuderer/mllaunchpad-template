@@ -260,6 +260,11 @@ def get_requirements(req_cfg):
     req_implementation = req_cfg.get("implementation", None)
     print("Downloading requirements from {} for platform tags {}...".format(req_file, target_platforms))
     with python_interpreter() as interpreter:
+        # Workaround for LightGBM 3.2.1 download error due to it assuming availability of the wheel package
+        try:
+            run_pip(interpreter, req_cfg, ["install", "wheel"])
+        except subprocess.CalledProcessError:
+            raise RuntimeError("An error occurred when installing the 'wheel' package.")
         delete_dir(target_dir)
         create_dir(target_dir)
         source_warnings = []
